@@ -26,6 +26,10 @@ function contentSecurityPolicy(nonce: string) {
 // Arabic is the default and has no URL prefix; English lives under /en.
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (process.env.CLIENT_PREVIEW === "true" && pathname.startsWith("/api")) {
+    return NextResponse.json({ error: "Client preview: saving and authentication are disabled." }, { status: 503 });
+  }
+  if (pathname.startsWith("/api")) return NextResponse.next();
   if (pathname === "/ar" || pathname.startsWith("/ar/")) {
     const url = req.nextUrl.clone();
     url.pathname = pathname.slice(3) || "/";
@@ -39,7 +43,15 @@ export function proxy(req: NextRequest) {
   headers.set("content-security-policy", csp);
   const jitsi = process.env.LIVE_JITSI_DOMAIN ? `https://${process.env.LIVE_JITSI_DOMAIN}` : "";
   let res: NextResponse;
-  if (pathname === "/en" || pathname.startsWith("/en/")) res = NextResponse.next({ request: { headers } });
+  if (process.env.CLIENT_PREVIEW === "true") {
+    const url = req.nextUrl.clone();
+    const english = pathname === "/en" || pathname.startsWith("/en/");
+    const path = english ? pathname.slice(3) : pathname;
+    url.pathname = `/${english ? "en" : "ar"}/client-preview${path === "/" ? "" : path}`;
+    res = NextResponse.rewrite(url, { request: { headers } });
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
+  else if (pathname === "/en" || pathname.startsWith("/en/")) res = NextResponse.next({ request: { headers } });
   else {
     const url = req.nextUrl.clone();
     url.pathname = `/ar${pathname === "/" ? "" : pathname}`;
@@ -51,5 +63,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|fonts|sw.js|favicon.ico|icon.svg|robots.txt|sitemap.xml|opengraph-image).*)"],
+  matcher: ["/((?!_next|fonts|sw.js|favicon.ico|icon.svg|robots.txt|sitemap.xml|opengraph-image).*)"],
 };

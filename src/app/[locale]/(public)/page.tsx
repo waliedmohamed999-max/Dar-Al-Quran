@@ -1,3 +1,4 @@
+import { previewPrograms } from "@/lib/client-preview";
 import Link from "next/link";
 import { BadgeCheck, BookOpenCheck, CalendarDays, ClipboardCheck, Headphones, LineChart, MessageSquareText, MonitorPlay, Users } from "lucide-react";
 import { FaqSearch, PlacementQuiz, Tabs } from "@/components/academy";
@@ -24,7 +25,10 @@ function Heading({ eyebrow, title, text }: { eyebrow?: string; title: string; te
 
 export default async function Home({ params }: PageParams) {
   const { locale, t, lp } = await pageCtx(params);
-  const [home, programs, faq, news, library, counts, ai, actor, firstAyahs] = await Promise.all([
+  const [home, programs, faq, news, library, counts, ai, actor, firstAyahs] = process.env.CLIENT_PREVIEW === "true" ? [
+    {} as HomeSettings, previewPrograms as Awaited<ReturnType<typeof listPrograms>>, [], [], 0,
+    { surahs: 114, ayahs: 6236, recitations: 5, lessons: 0 }, { enabled: false }, null, [],
+  ] as const : await Promise.all([
     getSetting<HomeSettings>("home", {}), listPrograms(), publicContent("FAQ", locale), systemDb().contentPage.findMany({ where: { status: "PUBLISHED", locale, type: { in: ["NEWS", "EVENT", "ARTICLE"] } }, orderBy: [{ featured: "desc" }, { publishedAt: "desc" }], take: 3 }),
     systemDb().contentPage.count({ where: { status: "PUBLISHED", type: "LIBRARY", locale } }), publicCounts(), aiStatus(), getActor(),
     systemDb().quranAyah.findMany({ where: { surahId: 1, ayahNumber: { lte: 3 } }, orderBy: { id: "asc" }, select: { id: true, text: true, ayahNumber: true } }),
@@ -67,7 +71,7 @@ export default async function Home({ params }: PageParams) {
           <div className="device" aria-label={t("معاينة من المصحف المعلم", "Preview of the teaching mushaf")}>
             <div className="device-bar"><span /><span /><span /><strong>{t("المصحف المعلم · الفاتحة", "Teaching mushaf · Al-Fatiha")}</strong></div>
             <div className="quran p-5" lang="ar" dir="rtl" style={{ "--quran-size": "1.55rem" } as React.CSSProperties}>
-              {firstAyahs.map((a, i) => <span key={a.id} className={i === 1 ? "bg-highlight rounded" : ""}>{a.text}<span className="ayah-end" aria-hidden="true">{a.ayahNumber}</span> </span>)}
+              {process.env.CLIENT_PREVIEW === "true" && <p>{t("معاينة متابعة الحفظ والتلاوة بإشراف المعلم", "Preview of teacher-guided memorization and recitation")}</p>}{firstAyahs.map((a, i) => <span key={a.id} className={i === 1 ? "bg-highlight rounded" : ""}>{a.text}<span className="ayah-end" aria-hidden="true">{a.ayahNumber}</span> </span>)}
             </div>
             <div className="device-foot"><Headphones className="size-4" aria-hidden="true" />{t("تمييز الآية الجارية، تكرار وسرعة وتفسير", "Current ayah highlight, repeat, speed and tafsir")}</div>
           </div>
@@ -111,7 +115,7 @@ export default async function Home({ params }: PageParams) {
         <section id="placement" className="py-20">
           <div className="mx-auto max-w-3xl px-4">
             <Heading eyebrow={t("دقيقة واحدة", "One minute")} title={t("اكتشف مستواك القرآني", "Discover your Quran level")} text={t("خمسة أسئلة لتوصية مبدئية، أما مستوى القراءة الفعلي فيحدده المعلم.", "Five questions for a preliminary recommendation. A teacher determines your actual reading level.")} />
-            <div className="card shadow-sm"><PlacementQuiz programs={programs.map((p) => ({ slug: p.slug, titleAr: p.titleAr, titleEn: p.titleEn, summaryAr: p.summaryAr, summaryEn: p.summaryEn }))} /></div>
+            <fieldset disabled={process.env.CLIENT_PREVIEW === "true"} className="card shadow-sm"><PlacementQuiz programs={programs.map((p) => ({ slug: p.slug, titleAr: p.titleAr, titleEn: p.titleEn, summaryAr: p.summaryAr, summaryEn: p.summaryEn }))} /></fieldset>
           </div>
         </section>
       )}
@@ -120,7 +124,7 @@ export default async function Home({ params }: PageParams) {
         <section className="bg-surface py-20">
           <div className="mx-auto max-w-7xl px-4">
             <Heading eyebrow={t("جرب الآن دون تسجيل", "Try it without registering")} title={t("المصحف المعلم بين يديك", "The teaching mushaf in your hands")} text={t("هذه هي الأداة الحقيقية: اختر القارئ والتكرار، جرب وضع المراجعة، واضغط آية لتفسيرها وأحكامها.", "This is the real tool: choose a reciter and repetition, try review mode, and tap an ayah for tafsir and rules.")} />
-            <MushafView where={{ surahId: 1 }} />
+            {process.env.CLIENT_PREVIEW === "true" ? <StudentPreview locale={locale} /> : <MushafView where={{ surahId: 1 }} />}
             <p className="mt-5 text-center"><Link className="btn btn-primary" href={lp("/mushaf")}>{t("افتح الفهرس الكامل", "Open the full index")}</Link></p>
           </div>
         </section>

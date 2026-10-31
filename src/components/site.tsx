@@ -128,10 +128,10 @@ export function SiteFooter({ locale, brandEmail, phone, address, social, program
         <div>
           <h2 className="mb-2 font-bold text-ink">{t("النشرة البريدية", "Newsletter")}</h2>
           <div className="footer-form">
-            <ActionForm path="/newsletter" submit={t("اشتراك", "Subscribe")} success={t("أرسلنا رابط تأكيد إلى بريدك.", "We sent a confirmation link.")} fields={[
+            <fieldset disabled={process.env.CLIENT_PREVIEW === "true"}><ActionForm path="/newsletter" submit={t("اشتراك", "Subscribe")} success={t("أرسلنا رابط تأكيد إلى بريدك.", "We sent a confirmation link.")} fields={[
               { name: "email", label: t("البريد الإلكتروني", "Email"), type: "email", required: true, full: true },
               { name: "consent", label: t("أوافق على استلام نشرة الدار، ويمكنني الإلغاء متى شئت.", "I agree to receive the newsletter and can unsubscribe at any time."), type: "checkbox", required: true, full: true },
-            ]} />
+            ]} /></fieldset>
           </div>
         </div>
       </div>
