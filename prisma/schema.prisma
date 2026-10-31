@@ -1,0 +1,2001 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------- Enums ----------------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LinkStatus {
+  PENDING
+  APPROVED
+  REVOKED
+  REJECTED
+}
+
+enum HalaqaMode {
+  IN_PERSON
+  REMOTE
+  HYBRID
+}
+
+enum HalaqaGender {
+  ANY
+  MALE
+  FEMALE
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  WAITLISTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum SessionStatus {
+  SCHEDULED
+  HELD
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum TaskType {
+  NEW_MEMORIZATION
+  NEAR_REVISION
+  FAR_REVISION
+  LISTENING
+  RECITATION
+  TAJWEED
+  TAFSIR
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  SKIPPED
+  CARRIED_OVER
+}
+
+enum MemorizationStatus {
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  NEEDS_RETRY
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  RESUBMIT
+  DELETED
+}
+
+enum ReviewDecision {
+  APPROVED
+  RESUBMIT
+}
+
+enum AssessmentKind {
+  MEMORIZATION
+  REVISION
+  TAJWEED
+  TAFSIR
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  PRACTICAL
+  TRUE_FALSE
+  COMPLETE_TEXT
+  ORDER
+  RECITATION
+  ORAL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+enum CertificateStatus {
+  PENDING_APPROVAL
+  ISSUED
+  REJECTED
+  REVOKED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum AiStatus {
+  ANSWERED
+  SOURCES_ONLY
+  REFERRED
+  RESOLVED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum ContentType {
+  PAGE
+  ARTICLE
+  NEWS
+  FAQ
+  TESTIMONIAL
+  LIBRARY
+  EVENT
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum FileKind {
+  RECITATION
+  CONTENT_IMAGE
+  BRANDING
+}
+
+enum FileScanStatus {
+  VALIDATED
+  REJECTED
+}
+
+enum BookmarkKind {
+  FAVORITE
+  BOOKMARK
+}
+
+// ---------------- Identity & RBAC ----------------
+
+/// Auth.js-style tables managed by Better Auth (mapped in src/lib/auth.ts).
+model User {
+  id            String     @id @default(cuid())
+  name          String
+  email         String     @unique
+  emailVerified Boolean    @default(false)
+  image         String?
+  locale        String     @default("ar")
+  status        UserStatus @default(ACTIVE)
+  isDemo        Boolean    @default(false)
+  twoFactorEnabled Boolean @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  twoFactors    TwoFactor[]
+  authSessions  AuthSession[]
+  authAccounts  AuthAccount[]
+  roles         UserRole[]
+  student       Student?
+  guardian      Guardian?
+  teacher       Teacher?
+  bookmarks     Bookmark[]
+  positions     ReadingPosition[]
+  notifications Notification[]
+  preferences   NotificationPreference?
+  auditLogs     AuditLog[]
+  files         File[]
+  contentPages  ContentPage[]           @relation("ContentAuthor")
+  sentMessages  Message[]               @relation("MessageSender")
+  recvMessages  Message[]               @relation("MessageRecipient")
+  liveJoins     LiveJoin[]
+  dhikrFavorites DhikrFavorite[]
+  adhkarPreference AdhkarPreference?
+  pushSubscriptions PushSubscription[]
+  adhkarLogs    AdhkarNotificationLog[]
+  ayahNotes     AyahNote[]
+  aiInteractions AiInteraction[]
+  libraryFavorites LibraryFavorite[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+model AuthAccount {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  nameAr      String
+  nameEn      String
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  key   String           @unique
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id       String  @id @default(cuid())
+  userId   String
+  roleId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Student {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  level               Int       @default(1)
+  isMinor             Boolean   @default(false)
+  recordingConsentAt  DateTime?
+  recordingConsentBy  String?
+  /// Guardian consent for a minor to use the AI assistant.
+  aiConsentAt         DateTime?
+  /// Learning track confirmed by a teacher.
+  track               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guardians      GuardianStudentLink[]
+  enrollments    Enrollment[]
+  attendance     Attendance[]
+  plans          LearningPlan[]
+  tasks          DailyTask[]
+  memorizations  MemorizationRecord[]
+  revisions      RevisionRecord[]
+  submissions    RecitationSubmission[]
+  reviews        TeacherReview[]
+  attempts       AssessmentAttempt[]
+  certificates   Certificate[]
+  badges         StudentBadge[]
+  hadithMemorizations HadithMemorization[]
+  hadithSubmissions HadithSubmission[]
+  placements     PlacementAssessment[]
+  skills         StudentSkill[]
+  competitionRegistrations CompetitionRegistration[]
+  ayahProgress   AyahProgress[]
+  lessonProgress LessonProgress[]
+  tafsirProgress TafsirProgress[]
+
+  @@map("students")
+  judgingEntries JudgingEntry[]
+}
+
+model Guardian {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links GuardianStudentLink[]
+
+  @@map("guardians")
+}
+
+/// A guardian only sees a student through an APPROVED link granted by authorized staff.
+model GuardianStudentLink {
+  id           String     @id @default(cuid())
+  guardianId   String
+  studentId    String
+  relation     String
+  status       LinkStatus @default(PENDING)
+  consentAt    DateTime?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime   @default(now())
+
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([guardianId, studentId])
+  @@index([studentId, status])
+  @@map("guardian_student_links")
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  bio       String?
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  halaqas  Halaqa[]
+  plans    LearningPlan[]
+  reviews  TeacherReview[]
+  substitutions HalaqaSession[] @relation("SubstituteTeacher")
+
+  @@map("teachers")
+}
+
+// ---------------- Halaqas ----------------
+
+model Halaqa {
+  id          String       @id @default(cuid())
+  name        String
+  teacherId   String?
+  ageGroup    String?
+  level       Int          @default(1)
+  gender      HalaqaGender @default(ANY)
+  capacity    Int
+  mode        HalaqaMode   @default(IN_PERSON)
+  /// AES-GCM ciphertext. Only returned to enrolled members and staff.
+  meetingUrlEnc String?
+  location    String?
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  teacher     Teacher?         @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  schedule    HalaqaSchedule[]
+  enrollments Enrollment[]
+  sessions    HalaqaSession[]
+  assessments Assessment[]
+
+  @@index([teacherId])
+  @@map("halaqas")
+}
+
+model HalaqaSchedule {
+  id        String @id @default(cuid())
+  halaqaId  String
+  /// 0 = Sunday ... 6 = Saturday
+  weekday   Int
+  /// minutes since midnight in local time
+  startMin  Int
+  endMin    Int
+
+  halaqa Halaqa @relation(fields: [halaqaId], references: [id], onDelete: Cascade)
+
+  @@unique([halaqaId, weekday, startMin])
+  @@map("halaqa_schedules")
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  halaqaId    String
+  studentId   String
+  status      EnrollmentStatus @default(PENDING)
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime         @default(now())
+
+  halaqa  Halaqa  @relation(fields: [halaqaId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([halaqaId, studentId])
+  @@index([studentId, status])
+  @@index([halaqaId, status, createdAt])
+  @@map("enrollments")
+}
+
+/// "Sessions" in the requirements: a class meeting (auth sessions are AuthSession).
+model HalaqaSession {
+  id                  String        @id @default(cuid())
+  halaqaId            String
+  startsAt            DateTime
+  endsAt              DateTime
+  status              SessionStatus @default(SCHEDULED)
+  substituteTeacherId String?
+  topic               String?
+  isOnline            Boolean       @default(false)
+  /// Unguessable room id, returned only after the join check.
+  liveRoom            String?       @unique
+  /// Recording stays off unless explicitly enabled with consent.
+  recordingEnabled    Boolean       @default(false)
+  sharedSurah         Int?
+  sharedAyah          Int?
+
+  halaqa     Halaqa       @relation(fields: [halaqaId], references: [id], onDelete: Cascade)
+  substitute Teacher?     @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
+  attendance Attendance[]
+  joins      LiveJoin[]
+
+  @@unique([halaqaId, startsAt])
+  @@index([startsAt])
+  @@map("halaqa_sessions")
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  sessionId   String
+  studentId   String
+  status      AttendanceStatus
+  note        String?
+  recordedById String
+  recordedAt  DateTime         @default(now())
+
+  session HalaqaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@index([studentId, recordedAt])
+  @@map("attendance")
+}
+
+// ---------------- Quran ----------------
+
+/// Reading tradition. All text and rule data hangs off a riwaya so they never mix.
+model Riwaya {
+  id     Int    @id
+  key    String @unique
+  nameAr String
+  nameEn String
+
+  ayahs       QuranAyah[]
+  recitations Recitation[]
+  rules       TajweedRule[]
+
+  @@map("riwayat")
+}
+
+model QuranSurah {
+  id              Int     @id
+  nameArabic      String
+  nameEnglish     String
+  meaningEnglish  String
+  revelationPlace String
+  ayahCount       Int
+  /// Bismillah displayed as a separate heading, never part of the ayah text.
+  bismillahPre    Boolean
+
+  ayahs QuranAyah[]
+
+  @@map("quran_surahs")
+}
+
+model QuranPage {
+  number      Int @id
+  firstAyahId Int
+  lastAyahId  Int
+  juz         Int
+
+  @@map("quran_pages")
+}
+
+model QuranAyah {
+  id         Int    @id
+  riwayaId   Int
+  surahId    Int
+  ayahNumber Int
+  /// Verbatim text from the licensed source, Bismillah heading separated. Immutable.
+  text       String
+  /// Diacritic-free form for search only. Never displayed.
+  searchText String
+  /// SHA-256 of `text`, verified against data/quran/manifest.json.
+  sha256     String
+  juz        Int
+  hizb       Int
+  rubAlHizb  Int
+  page       Int
+  sajda      Boolean @default(false)
+
+  riwaya      Riwaya             @relation(fields: [riwayaId], references: [id])
+  surah       QuranSurah         @relation(fields: [surahId], references: [id])
+  tajweed     TajweedAnnotation?
+  tafsir      TafsirEntry[]
+  examples    TajweedExample[]
+  bookmarks   Bookmark[]
+  positions   ReadingPosition[]
+  progress    AyahProgress[]
+  notes       AyahNote[]
+
+  @@unique([riwayaId, surahId, ayahNumber])
+  @@index([page])
+  @@index([juz])
+  @@map("quran_ayahs")
+}
+
+model Bookmark {
+  id        String       @id @default(cuid())
+  userId    String
+  ayahId    Int
+  kind      BookmarkKind
+  note      String?
+  createdAt DateTime     @default(now())
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ayah QuranAyah @relation(fields: [ayahId], references: [id])
+
+  @@unique([userId, ayahId, kind])
+  @@map("bookmarks")
+}
+
+model ReadingPosition {
+  userId    String    @id
+  ayahId    Int
+  updatedAt DateTime  @updatedAt
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ayah QuranAyah @relation(fields: [ayahId], references: [id])
+
+  @@map("reading_positions")
+}
+
+model Reciter {
+  id     Int    @id @default(autoincrement())
+  slug   String @unique
+  nameAr String
+  nameEn String
+
+  recitations Recitation[]
+
+  @@map("reciters")
+}
+
+/// Streaming source of one reciter. Audio is streamed from the provider, not re-hosted.
+model Recitation {
+  id          Int     @id @default(autoincrement())
+  slug        String  @unique
+  reciterId   Int
+  riwayaId    Int
+  style       String?
+  /// {sss} surah, {aaa} ayah (zero padded), {n} absolute ayah number
+  urlTemplate String
+  provider    String
+  licenseNote String
+  active      Boolean @default(true)
+
+  reciter Reciter       @relation(fields: [reciterId], references: [id])
+  riwaya  Riwaya        @relation(fields: [riwayaId], references: [id])
+  timings AudioTiming[]
+  wordTimings AyahWordTiming[]
+
+  @@map("recitations")
+}
+
+/// Optional provider timing data; rows expire to respect provider cache limits.
+model AudioTiming {
+  id           String   @id @default(cuid())
+  recitationId Int
+  surahId      Int
+  ayahNumber   Int
+  startMs      Int
+  endMs        Int
+  audioUrl     String
+  source       String
+  fetchedAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  recitation Recitation @relation(fields: [recitationId], references: [id], onDelete: Cascade)
+
+  @@unique([recitationId, surahId, ayahNumber])
+  @@index([expiresAt])
+  @@map("audio_timings")
+}
+
+model TafsirSource {
+  id          Int          @id @default(autoincrement())
+  slug        String       @unique
+  nameAr      String
+  nameEn      String
+  author      String
+  beginner    Boolean      @default(false)
+  /// Adapter key used to fetch entries, e.g. "qf:16".
+  adapterRef  String
+  licenseNote String
+  status      ReviewStatus @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+
+  entries TafsirEntry[]
+
+  @@map("tafsir_sources")
+}
+
+model TafsirEntry {
+  id        String    @id @default(cuid())
+  sourceId  Int
+  ayahId    Int
+  text      String
+  fetchedAt DateTime  @default(now())
+  /// Null only for content owned or licensed for permanent storage.
+  expiresAt DateTime?
+
+  source TafsirSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  ayah   QuranAyah    @relation(fields: [ayahId], references: [id])
+
+  @@unique([sourceId, ayahId])
+  @@index([expiresAt])
+  @@map("tafsir_entries")
+}
+
+model TajweedAnnotation {
+  ayahId       Int          @id
+  /// Source markup. Rendering strips it back to letters; see src/modules/quran/tajweed-markup.ts.
+  markup       String
+  source       String
+  reviewStatus ReviewStatus @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+
+  ayah QuranAyah @relation(fields: [ayahId], references: [id], onDelete: Cascade)
+
+  @@map("tajweed_annotations")
+}
+
+model TajweedRule {
+  id           String       @id @default(cuid())
+  slug         String       @unique
+  riwayaId     Int
+  category     String
+  level        Int
+  sortOrder    Int
+  /// Annotation code in the markup source, if this rule is highlightable.
+  markupCode   String?
+  titleAr      String
+  titleEn      String
+  bodyAr       String
+  bodyEn       String
+  /// Only with confirmed rights: both source and licence are required.
+  videoUrl     String?
+  audioUrl     String?
+  mediaSource  String?
+  mediaLicense String?
+  reviewStatus ReviewStatus @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+
+  riwaya   Riwaya           @relation(fields: [riwayaId], references: [id])
+  examples TajweedExample[]
+
+  @@index([riwayaId, category])
+  @@map("tajweed_rules")
+}
+
+model TajweedExample {
+  id           String       @id @default(cuid())
+  ruleId       String
+  ayahId       Int
+  excerpt      String
+  reviewStatus ReviewStatus @default(PENDING)
+  reviewedBy   String?
+
+  rule TajweedRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ayah QuranAyah   @relation(fields: [ayahId], references: [id])
+
+  @@unique([ruleId, ayahId])
+  @@map("tajweed_examples")
+}
+
+// ---------------- Learning ----------------
+
+model Curriculum {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  level       Int      @default(1)
+  /// Quran order to memorize: "REVERSE" from An-Nas or "FORWARD" from Al-Fatiha.
+  direction   String   @default("REVERSE")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  plans LearningPlan[]
+
+  @@map("curriculums")
+}
+
+model LearningPlan {
+  id             String     @id @default(cuid())
+  studentId      String
+  teacherId      String?
+  curriculumId   String?
+  status         PlanStatus @default(ACTIVE)
+  goal           String?
+  dailyMinutes   Int
+  newAyahsPerDay Int
+  /// weekdays the student studies, 0 = Sunday
+  studyDays      Int[]
+  cursorSurah    Int
+  cursorAyah     Int
+  direction      String     @default("REVERSE")
+  startDate      DateTime   @db.Date
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher    Teacher?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  curriculum Curriculum? @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  tasks      DailyTask[]
+
+  @@index([studentId, status])
+  @@map("learning_plans")
+}
+
+model DailyTask {
+  id               String     @id @default(cuid())
+  studentId        String
+  planId           String?
+  date             DateTime   @db.Date
+  type             TaskType
+  surahId          Int?
+  fromAyah         Int?
+  toAyah           Int?
+  ruleSlug         String?
+  suggestedMinutes Int        @default(10)
+  sortOrder        Int        @default(0)
+  status           TaskStatus @default(PENDING)
+  teacherNote      String?
+  completedAt      DateTime?
+  /// Carried-over tasks point to the original so history is never rewritten.
+  carriedFromId    String?    @unique
+  revisionOfId     String?
+  createdById      String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  student     Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan        LearningPlan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  carriedFrom DailyTask?            @relation("Carry", fields: [carriedFromId], references: [id], onDelete: SetNull)
+  carriedTo   DailyTask?            @relation("Carry")
+  submissions RecitationSubmission[]
+
+  @@index([studentId, date])
+  @@index([date, status])
+  @@map("daily_tasks")
+}
+
+model MemorizationRecord {
+  id           String             @id @default(cuid())
+  studentId    String
+  surahId      Int
+  fromAyah     Int
+  toAyah       Int
+  status       MemorizationStatus @default(IN_PROGRESS)
+  /// Spaced repetition state, driven by graded reviews (src/modules/learning/srs.ts).
+  ease         Float              @default(2.5)
+  intervalDays Int                @default(1)
+  repetitions  Int                @default(0)
+  nextReviewAt DateTime?          @db.Date
+  /// Teaching difficulty 1-5, set by a teacher. Separate from the spaced repetition state.
+  difficulty   Int?
+  difficultyNote String?
+  difficultySetById String?
+  difficultySetAt DateTime?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  revisions RevisionRecord[]
+
+  @@unique([studentId, surahId, fromAyah, toAyah])
+  @@index([studentId, nextReviewAt])
+  @@map("memorization_records")
+}
+
+model RevisionRecord {
+  id             String   @id @default(cuid())
+  studentId      String
+  memorizationId String
+  /// 1 (needs more work) .. 5 (excellent)
+  quality        Int
+  intervalBefore Int
+  intervalAfter  Int
+  dueAfter       DateTime @db.Date
+  /// Teacher override of the computed date, if any.
+  overridden     Boolean  @default(false)
+  gradedById     String?
+  createdAt      DateTime @default(now())
+
+  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  memorization MemorizationRecord @relation(fields: [memorizationId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("revision_records")
+}
+
+model RecitationSubmission {
+  id             String           @id @default(cuid())
+  studentId      String
+  taskId         String?
+  surahId        Int
+  fromAyah       Int
+  toAyah         Int
+  fileId         String?
+  status         SubmissionStatus @default(SUBMITTED)
+  consentGivenBy String
+  note           String?
+  deleteAfter    DateTime
+  createdAt      DateTime         @default(now())
+
+  student Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  task    DailyTask?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  file    File?           @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  reviews TeacherReview[]
+
+  @@index([studentId, status])
+  @@index([status, createdAt])
+  @@index([deleteAfter])
+  @@map("recitation_submissions")
+}
+
+/// Rubric scores are 1..5. Certificates and approvals always come from a person.
+model TeacherReview {
+  id                String         @id @default(cuid())
+  submissionId      String?
+  studentId         String
+  teacherId         String
+  memorizationScore Int
+  tajweedScore      Int
+  fluencyScore      Int
+  revisionScore     Int
+  decision          ReviewDecision
+  /// Structured coaching notes, e.g. [{surah, ayah, category, note}]
+  mistakes          Json           @default("[]")
+  note              String?
+  createdAt         DateTime       @default(now())
+
+  submission RecitationSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  student    Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher    Teacher               @relation(fields: [teacherId], references: [id])
+
+  @@index([studentId, createdAt])
+  @@index([teacherId, createdAt])
+  @@map("teacher_reviews")
+}
+
+model Badge {
+  id     String @id @default(cuid())
+  key    String @unique
+  nameAr String
+  nameEn String
+
+  awards StudentBadge[]
+
+  @@map("badges")
+}
+
+model StudentBadge {
+  studentId String
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  badge   Badge   @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, badgeId])
+  @@map("student_badges")
+}
+
+// ---------------- Assessments & certificates ----------------
+
+model Question {
+  id        String         @id @default(cuid())
+  kind      AssessmentKind
+  type      QuestionType
+  level     Int            @default(1)
+  tag       String?
+  promptAr  String
+  promptEn  String?
+  /// [{key, textAr, textEn}] for multiple choice
+  options   Json?
+  /// Server-only; never serialized to students before grading. Key, order or expected text.
+  correctKey String?
+  points    Int            @default(1)
+  /// Machine-drafted questions stay inactive until a teacher activates them.
+  aiDraft   Boolean        @default(false)
+  isDemo    Boolean        @default(false)
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now())
+
+  items   AssessmentQuestion[]
+  answers AssessmentAnswer[]
+
+  @@index([kind, level])
+  @@map("questions")
+}
+
+model Assessment {
+  id          String         @id @default(cuid())
+  title       String
+  kind        AssessmentKind
+  halaqaId    String?
+  createdById String
+  passPercent Int            @default(60)
+  published   Boolean        @default(false)
+  ruleSlug    String?
+  createdAt   DateTime       @default(now())
+
+  halaqa   Halaqa?              @relation(fields: [halaqaId], references: [id], onDelete: SetNull)
+  items    AssessmentQuestion[]
+  attempts AssessmentAttempt[]
+  competitions Competition[]
+
+  @@index([halaqaId])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  assessmentId String
+  questionId   String
+  sortOrder    Int    @default(0)
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@id([assessmentId, questionId])
+  @@map("assessment_questions")
+}
+
+model AssessmentAttempt {
+  id           String        @id @default(cuid())
+  assessmentId String
+  studentId    String
+  status       AttemptStatus @default(IN_PROGRESS)
+  scorePercent Int?
+  gradedById   String?
+  attemptNo    Int           @default(1)
+  expiresAt    DateTime?
+  /// Question ids in the order this attempt shows them.
+  questionOrder Json?
+  startedAt    DateTime      @default(now())
+  submittedAt  DateTime?
+
+  assessment Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student    Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers    AssessmentAnswer[]
+  events     ExamEvent[]
+  appeals    ExamAppeal[]
+
+  @@unique([assessmentId, studentId, attemptNo])
+  @@index([studentId])
+  @@map("assessment_attempts")
+}
+
+model AssessmentAnswer {
+  id           String  @id @default(cuid())
+  attemptId    String
+  questionId   String
+  selectedKey  String?
+  textAnswer   String?
+  /// Recitation answers: a private file checked through the attempt.
+  fileId       String?
+  awardedRatio Float?
+  teacherNote  String?
+
+  attempt  AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@map("assessment_answers")
+}
+
+model Certificate {
+  id            String            @id @default(cuid())
+  /// Public verification id printed on the certificate and in its QR code.
+  code          String            @unique
+  studentId     String
+  title         String
+  scope         String?
+  status        CertificateStatus @default(PENDING_APPROVAL)
+  requestedById String
+  approvedById  String?
+  approvedAt    DateTime?
+  issuedAt      DateTime?
+  revokedAt     DateTime?
+  /// What the certificate rests on: "attempt" or "judging". A person still approves it.
+  evidenceType  String?
+  evidenceId    String?
+  createdAt     DateTime          @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, evidenceType, evidenceId])
+  @@index([studentId])
+  @@map("certificates")
+}
+
+// ---------------- Notifications ----------------
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  key     String @id
+  titleAr String
+  bodyAr  String
+  titleEn String
+  bodyEn  String
+
+  @@map("notification_templates")
+}
+
+model NotificationPreference {
+  userId         String   @id
+  emailEnabled   Boolean  @default(true)
+  whatsappOptIn  Boolean  @default(false)
+  /// Types the user has muted. Security email is not muteable.
+  mutedTypes     String[] @default([])
+  maxEmailsPerDay Int     @default(5)
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+/// Postgres-backed work queue. See docs/ARCHITECTURE.md for why not Redis.
+model Job {
+  id        String    @id @default(cuid())
+  type      String
+  payload   Json
+  status    JobStatus @default(PENDING)
+  attempts  Int       @default(0)
+  runAt     DateTime  @default(now())
+  lastError String?
+  /// Set for scheduled jobs so each period only runs once.
+  dedupeKey String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, runAt])
+  @@map("jobs")
+}
+
+// ---------------- Academy public site ----------------
+
+/// Program pages are managed from the admin panel. English falls back to Arabic for long fields.
+model Program {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  titleAr        String
+  titleEn        String
+  summaryAr      String
+  summaryEn      String
+  overviewAr     String
+  objectivesAr   String[]
+  audienceAr     String[]
+  levelsAr       String[]
+  curriculumAr   String[]
+  outcomesAr     String[]
+  requirementsAr String[]
+  /// Only verified information; empty until the school provides it.
+  instructorNoteAr String?
+  requiresQualifiedTeachers Boolean @default(false)
+  featured       Boolean  @default(false)
+  published      Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("programs")
+}
+
+model NewsletterSubscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  locale         String    @default("ar")
+  consentAt      DateTime
+  confirmToken   String    @unique
+  unsubToken     String    @unique
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@map("newsletter_subscribers")
+}
+
+model LibraryFavorite {
+  userId    String
+  contentId String
+  createdAt DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content ContentPage @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, contentId])
+  @@map("library_favorites")
+}
+
+// ---------------- Live classes and AI ----------------
+
+model LiveJoin {
+  id        String   @id @default(cuid())
+  sessionId String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  session HalaqaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("live_joins")
+}
+
+model AiInteraction {
+  id           String   @id @default(cuid())
+  userId       String
+  studentId    String?
+  question     String
+  answer       String?
+  /// Source references shown with the answer.
+  citations    Json     @default("[]")
+  status       AiStatus
+  model        String?
+  teacherReply String?
+  resolvedById String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("ai_interactions")
+}
+
+// ---------------- CMS, messaging, platform ----------------
+
+model ContentPage {
+  id          String        @id @default(cuid())
+  type        ContentType
+  slug        String
+  locale      String        @default("ar")
+  title       String
+  excerpt     String?
+  /// Sanitized HTML (sanitized on write and on render).
+  body        String
+  status      ContentStatus @default(DRAFT)
+  isDemo      Boolean       @default(false)
+  sortOrder   Int           @default(0)
+  /// Library or news category, and optional https media. Videos are linked, not embedded.
+  category    String?
+  imageUrl    String?
+  mediaUrl    String?
+  featured    Boolean       @default(false)
+  seoTitle    String?
+  seoDescription String?
+  authorId    String?
+  reviewedBy  String?
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  author User? @relation("ContentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  favorites LibraryFavorite[]
+
+  @@unique([type, slug, locale])
+  @@index([type, status, locale, publishedAt])
+  @@map("content_pages")
+}
+
+model Message {
+  id          String    @id @default(cuid())
+  senderId    String
+  recipientId String
+  studentId   String?
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  sender    User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt])
+  @@index([studentId, createdAt])
+  @@map("messages")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  body      String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model File {
+  id         String         @id @default(cuid())
+  ownerId    String
+  kind       FileKind
+  storageKey String         @unique
+  mime       String
+  size       Int
+  sha256     String
+  scanStatus FileScanStatus @default(VALIDATED)
+  deletedAt  DateTime?
+  createdAt  DateTime       @default(now())
+
+  owner       User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  submissions RecitationSubmission[]
+  hadithSubmissions HadithSubmission[]
+
+  @@index([ownerId])
+  @@map("files")
+}
+
+/// Append-only: UPDATE and DELETE are revoked from the app role in the RLS migration.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entity     String
+  entityId   String?
+  /// Identifiers and changed field names only, no personal data.
+  meta       Json     @default("{}")
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("rate_limits")
+}
+
+// ---------------- V3: adhkar ----------------
+
+enum DhikrCategory {
+  MORNING_EVENING
+  SLEEP
+  WAKING
+  AFTER_PRAYER
+  FOOD
+  ENTRY_EXIT
+  TRAVEL
+  GENERAL
+}
+
+model Dhikr {
+  id           String        @id @default(cuid())
+  externalRef  String?       @unique
+  category     DhikrCategory
+  titleAr      String
+  text         String
+  /// Null when the source states no count.
+  repeat       Int?
+  sourceName   String
+  takhrij      String?
+  explanation  String?
+  explanationSource String?
+  /// Only for audio whose rights are confirmed.
+  audioUrl     String?
+  audioSource  String?
+  audioLicense String?
+  /// Result of comparing quoted Quran with the stored mushaf text. Advisory: reviewers decide.
+  quoteCheck   Json?
+  quoteCheckedAt DateTime?
+  licenseNote  String
+  reviewStatus ReviewStatus  @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  favorites DhikrFavorite[]
+
+  @@index([category, reviewStatus, sortOrder])
+  @@map("adhkar")
+}
+
+model DhikrFavorite {
+  userId  String
+  dhikrId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dhikr   Dhikr @relation(fields: [dhikrId], references: [id], onDelete: Cascade)
+
+  @@id([userId, dhikrId])
+  @@map("adhkar_favorites")
+}
+
+/// Off until the user opts in. Times are minutes after local midnight.
+model AdhkarPreference {
+  userId         String   @id
+  enabled        Boolean  @default(false)
+  timezone       String   @default("Asia/Riyadh")
+  categories     String[] @default([])
+  morningMin     Int?     @default(420)
+  eveningMin     Int?     @default(1020)
+  sleepMin       Int?
+  wakeMin        Int?
+  days           Int[]    @default([0, 1, 2, 3, 4, 5, 6])
+  dndStartMin    Int?
+  dndEndMin      Int?
+  minIntervalMin Int      @default(60)
+  pushEnabled    Boolean  @default(false)
+  usePrayerTimes Boolean  @default(false)
+  /// Rounded by the service to about 1 km; only needed for prayer times.
+  latitude       Float?
+  longitude      Float?
+  calcMethod     String   @default("UmmAlQura")
+  lastSentAt     DateTime?
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("adhkar_preferences")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model AdhkarNotificationLog {
+  id           String   @id @default(cuid())
+  userId       String
+  /// Reminder slot, e.g. "morning" or "after_prayer:fajr".
+  slot         String
+  localDate    String
+  channel      String
+  status       String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot, localDate])
+  @@map("adhkar_notification_logs")
+}
+
+// ---------------- V3: hadith academy ----------------
+
+enum HadithStatus {
+  ASSIGNED
+  PRACTICING
+  READY
+  SUBMITTED
+  MASTERED
+  NEEDS_RETRY
+}
+
+model HadithCollection {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  titleAr       String
+  titleEn       String
+  descriptionAr String
+  sourceName    String
+  licenseNote   String
+  level         Int      @default(1)
+  published     Boolean  @default(false)
+  /// The final exam runs on the competition engine, so autosave, audio and appeals are shared.
+  finalCompetitionId String? @unique
+  createdAt     DateTime @default(now())
+
+  entries HadithEntry[]
+
+  @@map("hadith_collections")
+}
+
+model HadithEntry {
+  id           String       @id @default(cuid())
+  collectionId String
+  number       Int
+  /// Verbatim source text. Changes only through a reviewed edit.
+  text         String
+  sha256       String
+  narrator     String?
+  sourceRef    String?
+  topic        String?
+  /// Only as transmitted by a named reference. Null means not yet documented.
+  grade        String?
+  gradeSource  String?
+  explanation  String?
+  explanationSource String?
+  vocabulary   Json?
+  benefits     String?
+  reviewStatus ReviewStatus @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+
+  collection    HadithCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  memorizations HadithMemorization[]
+  submissions   HadithSubmission[]
+
+  @@unique([collectionId, number])
+  @@map("hadith_entries")
+}
+
+model HadithMemorization {
+  id           String       @id @default(cuid())
+  studentId    String
+  hadithId     String
+  status       HadithStatus @default(ASSIGNED)
+  assignedById String?
+  reciteBy     DateTime?    @db.Date
+  ease         Float        @default(2.5)
+  intervalDays Int          @default(1)
+  repetitions  Int          @default(0)
+  nextReviewAt DateTime?    @db.Date
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  hadith  HadithEntry  @relation(fields: [hadithId], references: [id], onDelete: Cascade)
+  reviews HadithReview[]
+
+  @@unique([studentId, hadithId])
+  @@index([studentId, nextReviewAt])
+  @@map("hadith_memorizations")
+}
+
+model HadithSubmission {
+  id             String           @id @default(cuid())
+  studentId      String
+  hadithId       String
+  fileId         String?
+  status         SubmissionStatus @default(SUBMITTED)
+  consentGivenBy String
+  deleteAfter    DateTime
+  createdAt      DateTime         @default(now())
+
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  hadith  HadithEntry @relation(fields: [hadithId], references: [id], onDelete: Cascade)
+  file    File?       @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("hadith_submissions")
+}
+
+model HadithReview {
+  id                 String         @id @default(cuid())
+  memorizationId     String
+  studentId          String
+  teacherId          String
+  memorizationScore  Int
+  understandingScore Int
+  decision           ReviewDecision
+  mistakes           String?
+  note               String?
+  createdAt          DateTime       @default(now())
+
+  memorization HadithMemorization @relation(fields: [memorizationId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("hadith_reviews")
+}
+
+// ---------------- V3: placement and skills ----------------
+
+enum PlacementStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+model PlacementAssessment {
+  id                String          @id @default(cuid())
+  studentId         String
+  status            PlacementStatus @default(DRAFT)
+  stage             Int             @default(1)
+  /// The practice run is never scored; only its completion date is kept.
+  practiceCompletedAt DateTime?
+  intake            Json            @default("{}")
+  tajweedAnswers    Json            @default("{}")
+  /// Share of placement tajweed questions answered correctly: a knowledge indicator only.
+  tajweedPercent    Int?
+  memorizationAnswers Json          @default("{}")
+  memorizationPercent Int?
+  readingFileId     String?
+  memorizationFileId String?
+  recommendedTrack  String?
+  approvedTrack     String?
+  teacherNote       String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skills  StudentSkill[]
+
+  @@index([studentId, status])
+  @@index([status, updatedAt])
+  @@map("placement_assessments")
+}
+
+/// Append-only history: the latest row per skill is the current profile.
+model StudentSkill {
+  id           String   @id @default(cuid())
+  studentId    String
+  skill        String
+  /// 1..5
+  level        Int
+  source       String
+  assessedById String?
+  assessmentId String?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  student    Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assessment PlacementAssessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, skill, createdAt])
+  @@map("student_skills")
+}
+
+// ---------------- V3: competitions ----------------
+
+model Competition {
+  id                  String   @id @default(cuid())
+  slug                String   @unique
+  title               String
+  description         String
+  kind                String
+  level               String
+  ageGroup            String?
+  conditions          String?
+  criteria            String
+  resultsMethod       String
+  prizes              String?
+  registrationOpensAt DateTime
+  registrationClosesAt DateTime
+  examStartsAt        DateTime
+  examEndsAt          DateTime
+  durationMin         Int
+  maxAttempts         Int      @default(1)
+  randomize           Boolean  @default(true)
+  leaderboardEnabled  Boolean  @default(false)
+  resultsPublished    Boolean  @default(false)
+  published           Boolean  @default(false)
+  isDemo              Boolean  @default(false)
+  assessmentId        String
+  createdById         String
+  createdAt           DateTime @default(now())
+
+  assessment    Assessment                @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  registrations CompetitionRegistration[]
+  judgingSessions JudgingSession[]
+
+  @@index([published, examStartsAt])
+  @@map("competitions")
+}
+
+model CompetitionRegistration {
+  id              String   @id @default(cuid())
+  competitionId   String
+  studentId       String
+  /// Explicit opt-in. Minors never appear on a leaderboard.
+  showOnLeaderboard Boolean @default(false)
+  createdAt       DateTime @default(now())
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, studentId])
+  @@map("competition_registrations")
+}
+
+model ExamEvent {
+  id        String   @id @default(cuid())
+  attemptId String
+  type      String
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId, createdAt])
+  @@map("exam_events")
+}
+
+model ExamAppeal {
+  id          String       @id @default(cuid())
+  attemptId   String?
+  judgingEntryId String?
+  previousScore Int?
+  newScore    Int?
+  studentId   String
+  reason      String
+  status      ReviewStatus @default(PENDING)
+  decision    String?
+  decidedById String?
+  createdAt   DateTime     @default(now())
+
+  attempt AssessmentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("exam_appeals")
+}
+
+// ---------------- V3: ayah-level progress and study ----------------
+
+enum AyahStatus {
+  NOT_STARTED
+  PRACTICING
+  READY
+  RECITED
+  NEEDS_REVIEW
+  MASTERED
+}
+
+model AyahProgress {
+  studentId   String
+  ayahId      Int
+  status      AyahStatus
+  updatedById String?
+  updatedAt   DateTime   @updatedAt
+
+  student Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  ayah    QuranAyah @relation(fields: [ayahId], references: [id])
+
+  @@id([studentId, ayahId])
+  @@index([studentId, status])
+  @@map("ayah_progress")
+}
+
+model AyahNote {
+  id        String   @id @default(cuid())
+  userId    String
+  ayahId    Int
+  body      String
+  updatedAt DateTime @updatedAt
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ayah QuranAyah @relation(fields: [ayahId], references: [id])
+
+  @@unique([userId, ayahId])
+  @@map("ayah_notes")
+}
+
+model LessonProgress {
+  studentId    String
+  ruleSlug     String
+  scorePercent Int?
+  completedAt  DateTime?
+  teacherNote  String?
+  updatedAt    DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, ruleSlug])
+  @@map("lesson_progress")
+}
+
+model TafsirProgress {
+  studentId String
+  surahId   Int
+  ayahUpTo  Int
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, surahId])
+  @@map("tafsir_progress")
+}
+
+/// Word positions inside one ayah audio file, from a licensed timing dataset.
+model AyahWordTiming {
+  recitationId Int
+  surahId      Int
+  ayahNumber   Int
+  /// [[wordStart, wordEndExclusive, startMs, endMs], ...]
+  segments     Json
+  source       String
+
+  recitation Recitation @relation(fields: [recitationId], references: [id], onDelete: Cascade)
+
+  @@id([recitationId, surahId, ayahNumber])
+  @@map("ayah_word_timings")
+}
+
+enum StudyResourceKind {
+  VOCABULARY
+  ASBAB
+  TOPIC
+}
+
+/// Word meanings, occasions of revelation and topics. Never shown without a named source and approval.
+model StudyResource {
+  id           String            @id @default(cuid())
+  kind         StudyResourceKind
+  surahId      Int
+  fromAyah     Int
+  toAyah       Int
+  term         String?
+  body         String
+  sourceName   String
+  sourceRef    String
+  licenseNote  String
+  reviewStatus ReviewStatus      @default(PENDING)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdById  String
+  createdAt    DateTime          @default(now())
+
+  @@index([surahId, kind, reviewStatus])
+  @@map("study_resources")
+}
+
+model Rubric {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  criteria RubricCriterion[]
+  sessions JudgingSession[]
+
+  @@map("rubrics")
+}
+
+model RubricCriterion {
+  id          String @id @default(cuid())
+  rubricId    String
+  labelAr     String
+  labelEn     String?
+  /// Describes what full marks look like, so judges apply the criterion alike.
+  guidanceAr  String
+  maxScore    Int
+  weight      Int    @default(1)
+  sortOrder   Int    @default(0)
+
+  rubric Rubric         @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  scores JudgingScore[]
+
+  @@map("rubric_criteria")
+}
+
+enum JudgingStatus {
+  SCHEDULED
+  OPEN
+  CLOSED
+  APPROVED
+}
+
+enum JudgingEntryStatus {
+  WAITING
+  ON_STAGE
+  DONE
+  ABSENT
+}
+
+/// A live oral judging session. Judges score; results count only after a person approves them.
+model JudgingSession {
+  id            String        @id @default(cuid())
+  competitionId String
+  rubricId      String
+  title         String
+  scheduledAt   DateTime
+  passPercent   Int           @default(60)
+  status        JudgingStatus @default(SCHEDULED)
+  createdById   String
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime      @default(now())
+
+  competition Competition    @relation(fields: [competitionId], references: [id], onDelete: Restrict)
+  rubric      Rubric         @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  judges      JudgingJudge[]
+  entries     JudgingEntry[]
+
+  @@index([competitionId])
+  @@map("judging_sessions")
+}
+
+model JudgingJudge {
+  sessionId String
+  userId    String
+
+  session JudgingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@map("judging_judges")
+}
+
+model JudgingEntry {
+  id           String             @id @default(cuid())
+  sessionId    String
+  studentId    String
+  /// Public results use this code, so a participant is not named without consent.
+  code         String
+  sortOrder    Int
+  status       JudgingEntryStatus @default(WAITING)
+  finalPercent Int?
+
+  session JudgingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  scores  JudgingScore[]
+
+  @@unique([sessionId, studentId])
+  @@unique([sessionId, code])
+  @@map("judging_entries")
+}
+
+model JudgingScore {
+  entryId     String
+  judgeId     String
+  criterionId String
+  score       Int
+  note        String?
+  updatedAt   DateTime @updatedAt
+
+  entry     JudgingEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  criterion RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  @@id([entryId, judgeId, criterionId])
+  @@map("judging_scores")
+}
+
+/// Encrypted TOTP secret and backup codes, managed by the auth library.
+model TwoFactor {
+  id          String @id @default(cuid())
+  secret      String
+  backupCodes String
+  verified    Boolean? @default(true)
+  /// The library locks the factor after repeated wrong codes.
+  failedVerificationCount Int? @default(0)
+  lockedUntil DateTime?
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_two_factors")
+}
+
+/// One row per scholarly decision. Kept when content changes, so the history stays readable.
+model ContentReview {
+  id         String   @id @default(cuid())
+  targetType String
+  targetId   String
+  decision   ReviewStatus
+  reason     String?
+  reviewerId String
+  /// Hash of the exact text the reviewer saw.
+  contentSha String
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId, createdAt])
+  @@map("content_reviews")
+}
+
+/// The scholar responsible for an item. Assignment does not approve anything.
+model ReviewAssignment {
+  targetType   String
+  targetId     String
+  reviewerId   String
+  assignedById String
+  updatedAt    DateTime @updatedAt
+
+  @@id([targetType, targetId])
+  @@map("review_assignments")
+}

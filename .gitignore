@@ -1,0 +1,17 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+src/generated
+data/quran/raw
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+next-env.d.ts
+backups
+data/content/raw
+
+data/timing/raw
+docs/release/screenshots

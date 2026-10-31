@@ -1,0 +1,13 @@
+{
+  "hadith": {
+    "source": "fawazahmed0/hadith-api ara-nawawi",
+    "count": 42,
+    "allSha256": "92f933ee00bcd4af04a152166e77049205d0e7c43cad9be9bff2cdbef96d9167",
+    "withGrade": 0
+  },
+  "adhkar": {
+    "source": "hisnmuslim.com husn_ar",
+    "chapters": 132,
+    "count": 267
+  }
+}
